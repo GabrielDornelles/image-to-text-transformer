@@ -269,10 +269,10 @@ class Vocabulary:
 ```
 
 Inicializamos nossos dicionários itos e stoi (index-to-string, string-to-index) com alguns tokens especiais, são eles:
-- O token que demarca o ínicio da frase (<SOS> start of sentence), 
-- O fim (<EOS> end of sentence), 
-- O desconhecido (<UNK> unknown, para palavras que fujam do vocabulário que possuímos) 
-- um token de padding (<PAD>), que utilizaremos para transformarmos todos os nossos pares de imagem-texto em um tamanho fixo (e isto nos possibilita treinar em batches).
+- O token que demarca o ínicio da frase (SOS > start of sentence), 
+- O fim (EOS > end of sentence), 
+- O desconhecido (UNK > unknown, para palavras que fujam do vocabulário que possuímos) 
+- um token de padding (PAD > padding), que utilizaremos para transformarmos todos os nossos pares de imagem-texto em um tamanho fixo (e isto nos possibilita treinar em batches).
 
 Em seguida temos os métodos `tokenizer_eng` o qual foi introduzido acima e tem a função de separar uma string em palavras que serão tokenizadas, e nosso método `build_vocabulary` que irá receber todas as descrições de nossas imagens e popular nosso vocabulário. Uma limitação foi colocada aqui para construirmos o vocabulário apenas com palavras que apareçam pelo menos N vezes (n=5 em meu exemplo), introduzida aqui somente para tornarmos o modelo mais leve e mais praticável como um hello world (e verá que mesmo assim levará algumas horas para realizar um treinamento).
 
