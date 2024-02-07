@@ -60,6 +60,21 @@ O objetivo técnico a resolvermos é o seguinte:
 
 Lembre-se que algumas destas restrições só foram colocadas para nos forçarmos a aprender algumas coisas novas, e que há modelos que utilizam de qualquer uma das 3 redes as quais não iremos utilizar.
 
+## Arquitetura
+
+A título de referência, o GPT2 tem é construído da seguinte maneira:
+
+
+```
+vocab_size=50257
+
+# Transformer layers and sizes
+'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
+'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
+'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
+```
+
+
 ## Table of Contents
 
 1. Dataset
@@ -67,6 +82,15 @@ Lembre-se que algumas destas restrições só foram colocadas para nos forçarmo
 3. PatchEmbedding
 4. Transformer
 5. ?
+
+
+Nosso modelo é composto pelos seguintes blocos:
+
+visual = PatchEmbedding + PatchPositionalEmbedding
+
+text = CaptionEmbeddings + CaptionPositionalEmbeddings
+
+output = Transformer(visual, text)
 
 
 ## Patch Embedding
@@ -124,3 +148,175 @@ Veja:
 Nos dias de hoje parece mais adequado inicializar com a distribuição normal (`torch.randn`), como pode ver nas [implementações atuais do ViT](https://github.com/huggingface/pytorch-image-models/blob/v0.9.12/timm/models/vision_transformer.py#L493C9-L493C82)
 
 Feito isso, já fizemos a parte de imagem do nosso modelo. Simples assim! Apenas uma convolução com kernel_size e strides altos e operações pra alteração do shape do tensor (flatten e transpose) que serão somados a um tensor de mesmo shape que chamamos positional embeddings.
+
+## Texto e Tokenização
+
+Escreverei neste tópico de maneira resumida, mas presumindo que você talvez nunca tenha trabalhado com texto no deep learning. A tokenização precede os Transformers, e já era utilizada claro antes do advento da arquitetura. Trata-se de representar texto como nós humanos conhecemos numericamente. O método mais rudimentar consiste em mapear letras para tokens, como o alfabeto para a numeração 0-25. Dessa maneira as palavras seriam representadas da seguinte maneira:
+```sh
+"casa": =>  c: 2    a: 0   s: 18    a: 0
+Tokenização: [2, 0, 18, 0]
+
+"sol" => s:18   o:14   l:11
+Tokenização: [18, 14, 11]
+
+"gato" => g: 6    a: 0   t: 19    o: 14
+Tokenização: [6, 0, 19, 14]
+
+"lua" =>  l: 11   u: 20   a: 0
+Tokenização: [11, 20, 0]
+
+"rio" => r: 17   i: 8   o: 14
+Tokenização: [17, 8, 14]
+```
+
+Como pode ver, este método confere a capacidade de 1-1 de letras em uma frase para elementos em um array.
+
+Representações mais atuais contemplam palavras inteiras, uma vez que isto aumenta consideravelmente a quantidade de texto que podemos passar a um mesmo modelo. Tokenizar as palavras seria um processo longo e árduo, mas não se preocupe, existem ferramentas prontas (as quais devemos usar para facilitar nossas vidas) que realizam essa tokenização. Utilizarei aqui o `spacy`, mas saiba que existem outros como por exemplo os tokenizadores da biblioteca `transformers` do `huggingface`:
+
+```py
+import spacy
+
+# Load English tokenizer, tagger, parser and NER
+spacy_eng = spacy.load("en_core_web_sm")
+
+# Process whole documents
+text = ("In a cozy cottage nestled in the woods, there lived a curious rabbit named Flopsy. "
+        "One day, while hopping through the forest, Flopsy discovered a sparkling crystal hidden among the ferns. "
+        "Mesmerized by its beauty, Flopsy decided to share the crystal with all the woodland creatures, "
+        "spreading joy and wonder throughout the forest. "
+        "From that day on, Flopsy became known as the 'Keeper of Happiness', "
+        "and the forest echoed with laughter and gratitude.")
+
+tokenized = [tok.text.lower() for tok in spacy_eng.tokenizer(text)]
+print(tokenized)
+
+>>> ['in', 'a', 'cozy', 'cottage', 'nestled', 'in', 'the', 'woods', ',', 'there', 'lived', 'a', 'curious', 
+     'rabbit', 'named', 'flopsy', '.', 'one', 'day', ',', 'while', 'hopping', 'through', 'the', 'forest', ',', 
+     'flopsy', 'discovered', 'a', 'sparkling', 'crystal', 'hidden', 'among', 'the', 'ferns', '.', 'mesmerized', 
+     'by', 'its', 'beauty', ',', 'flopsy', 'decided', 'to', 'share', 'the', 'crystal', 'with', 'all', 'the', 
+     'woodland', 'creatures', ',', 'spreading', 'joy', 'and', 'wonder', 'throughout', 'the', 'forest', '.', 
+     'from', 'that', 'day', 'on', ',', 'flopsy', 'became', 'known', 'as', 'the', "'", 'keeper', 'of', 'happiness', 
+     "'", ',', 'and', 'the', 'forest', 'echoed', 'with', 'laughter', 'and', 'gratitude', '.']
+```
+
+Veja este mesmo exemplo com um tokenizador da biblioteca `transformers`:
+
+```py
+# pip3 install transformers
+from transformers import AutoTokenizer
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# Process whole documents
+text = ("In a cozy cottage nestled in the woods, there lived a curious rabbit named Flopsy. "
+        "One day, while hopping through the forest, Flopsy discovered a sparkling crystal hidden among the ferns. "
+        "Mesmerized by its beauty, Flopsy decided to share the crystal with all the woodland creatures, "
+        "spreading joy and wonder throughout the forest. "
+        "From that day on, Flopsy became known as the 'Keeper of Happiness', "
+        "and the forest echoed with laughter and gratitude.")
+tokenized = tokenizer.tokenize(text)
+print(tokenized)
+
+>>> ['in', 'a', 'cozy', 'cottage', 'nestled', 'in', 'the', 'woods', ',', 'there', 'lived', 'a', 'curious', 
+     'rabbit', 'named', 'flop', '##sy', '.', 'one', 'day', ',', 'while', 'hopping', 'through', 'the', 'forest', 
+     ',', 'flop', '##sy', 'discovered', 'a', 'sparkling', 'crystal', 'hidden', 'among', 'the', 'ferns', '.', 
+     'me', '##sm', '##eri', '##zed', 'by', 'its', 'beauty', ',', 'flop', '##sy', 'decided', 'to', 'share', 'the', 
+     'crystal', 'with', 'all', 'the', 'woodland', 'creatures', ',', 'spreading', 'joy', 'and', 'wonder', 'throughout', 
+     'the', 'forest', '.', 'from', 'that', 'day', 'on', ',', 'flop', '##sy', 'became', 'known', 'as', 'the', "'", 
+     'keeper', 'of', 'happiness', "'", ',', 'and', 'the', 'forest', 'echoed', 'with', 'laughter', 'and', 'gratitude', '.']
+```
+
+Você verá algumas diferenças entre os tokenizadores, mas de maneira geral utilize o que preferir, mas lembre-se que os tokenizadores disponibilizados pelo huggingface são os mesmos utilizados nos modelos como BERT e GPT, dessa maneira eles certamente tem alguma vantagem comparado a outros (mas não tenho certeza a respeito disso).
+
+Após separar nosso texto em diferentes palavras, basta que agora criemos um dicionário onde cada palavra representa um número. Chamamos esse dicionário de vocabulário. Darei um exemplo de uma classe vocabulário uma vez que implementaremos nela todas as funcionalidades discutidas até então:
+
+```py
+class Vocabulary:
+    def __init__():
+        self.itos = {0: "<PAD>", 1: "<SOS>", 2: "<EOS>", 3: "<UNK>"}
+        self.stoi = {"<PAD>": 0, "<SOS>": 1, "<EOS>": 2, "<UNK>": 3}
+        self.freq_threshold = freq_threshold
+
+    @staticmethod
+    def tokenizer_eng(text):
+        return [tok.text.lower() for tok in spacy_eng.tokenizer(text)]
+
+    def build_vocabulary(self, sentence_list):
+        """
+        Sentence list is a list of long strings just like the above example
+        """
+        frequencies = {}
+        idx = 4
+
+        for sentence in sentence_list:
+            for word in self.tokenizer_eng(sentence):
+                if word not in frequencies:
+                    frequencies[word] = 1
+                else:
+                    frequencies[word] += 1
+
+                if frequencies[word] == self.freq_threshold:
+                    self.stoi[word] = idx
+                    self.itos[idx] = word
+                    idx += 1
+
+    def numericalize(self, caption):
+        tokenized_text = self.tokenizer_eng(caption)
+        numericalized = [self.stoi[token] if token in self.stoi else self.stoi["<UNK>"] 
+            for token in tokenized_text]
+        return numericalized
+```
+
+Inicializamos nossos dicionários itos e stoi (index-to-string, string-to-index) com alguns tokens especiais, são eles:
+- O token que demarca o ínicio da frase (<SOS> start of sentence), 
+- O fim (<EOS> end of sentence), 
+- O desconhecido (<UNK> unknown, para palavras que fujam do vocabulário que possuímos) 
+- um token de padding (<PAD>), que utilizaremos para transformarmos todos os nossos pares de imagem-texto em um tamanho fixo (e isto nos possibilita treinar em batches).
+
+Em seguida temos os métodos `tokenizer_eng` o qual foi introduzido acima e tem a função de separar uma string em palavras que serão tokenizadas, e nosso método `build_vocabulary` que irá receber todas as descrições de nossas imagens e popular nosso vocabulário. Uma limitação foi colocada aqui para construirmos o vocabulário apenas com palavras que apareçam pelo menos N vezes (n=5 em meu exemplo), introduzida aqui somente para tornarmos o modelo mais leve e mais praticável como um hello world (e verá que mesmo assim levará algumas horas para realizar um treinamento).
+
+Por último temos o método `numerizalize` que irá tokenizar de fato longas strings em listas puramente numéricas que tem uma representação direta em um vocabulário conhecido, o qual acabamos de construir.
+
+## Transformer
+
+Utilizaremos o transformer padrão disponiblizado pelo `torch.nn`, o escopo de hoje não é explicar em detalhe o funcionamento do Transformer, mas introduzi-lo e mostrar ao leitor que este módulo já é inteiramente implementado no próprio torch.nn, ou seja, não é nada especial ou com arquiteturas diferentes ou variantes de partes do mesmo (uma vez que há muitas variações dos distintos módulos que o compoõe).
+
+```py
+self.transformer = torch.nn.Transformer(
+    embed_dim, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, dropout
+)
+```
+
+O Transformer é composto de dois módulos, encoder e decoder, quando criamos com o `nn.Transformer` estamos criando o Transformer inteiro, mas saiba que há modelos que usam apenas o encoder ou decoder. BERT é um encoder, GPTs são decoders, porém usualmente GPTs recebem informaçoes que passam por um encoder, transformando o sistema final em um Transformer inteiro. O bloco responsável por receber N tokens e entregar o próximo é conhecido como decoder (e você já deve ter visto que a tarefa do ChatGPT é prever a próxima palavra), e é necessário um encoding destes N tokens, por isso os sistemas de GPT são transformers completos.
+
+Nosso transformer é semelhante a um GPT, exceto que, juntamente a informação semântica (texto) ele também processa dados visuais (imagem). A inferência deste se parece da seguinte maneira:
+
+```py
+def forward(self, images, captions):
+    # embed images
+    embed_imgs = self.patch_embed(images)
+    embed_imgs = embed_imgs + self.pos_embed  
+
+    # embed captions
+    B, trg_seq_len = captions.shape 
+    trg_positions = (torch.arange(0, trg_seq_len).expand(B, trg_seq_len).to(self.device))
+    embed_trg = self.trg_emb(captions) + self.trg_pos_emb(trg_positions)
+
+    trg_mask = self.transformer.generate_square_subsequent_mask(trg_seq_len).to(self.device)
+    tgt_padding_mask = captions == 0
+    # transformer
+    y = self.transformer(
+        embed_imgs.permute(1,0,2),  
+        embed_trg.permute(1,0,2),  
+        tgt_mask=trg_mask, 
+        tgt_key_padding_mask = tgt_padding_mask
+    ).permute(1,0,2) 
+    # head
+    return self.fc(self.l(y))
+```
+
+Veja que as entradas para o Transformer são o tensor de tokens das imagens e o tensor tokenizado de texto. Juntamente a essas informações, o modelo recebe uma `tgt_mask`, que serve para esconder durante o treinamento palavras futuras durante o processamento dos módulos de `Attention`¹ e `tgt_key_padding_mask` que serve para ignoramos os tokens que são padding (tokens que utilizamos para que todos captions sejam de um tamanho fixo). Por último passamos toda a saída do Transformer por uma `LayerNorm` e aplicamos um matmul com uma camada linear que irá conter probabilidades para cada token em nosso vocabulário, por fim apenas aplicaremos um argmax para descobrirmos qual o token mais provável de ser o próximo.
+
+
+¹ Não entrarei em detalhes, mas é uma matriz com diagonal superior -inf de maneira que o processamento do bloco de atenção não utilize os tokens seguintes ao passo atual, assim quando está processando o inicio da frase ela não terá acesso ao final (por exemplo) e desta forma não irá aprender correlações as quais não terá quando não possuir as respostas para as imagens que está recebendo.
